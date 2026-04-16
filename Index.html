@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+    <head>
+        <meta charset="UTF-8">
+        <title>Gộp 2 liên A5 - Giữ 100% Hình Ảnh Chữ Ký</title>
+        <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+        <script>
+            // Cấu hình worker cho PDF.js
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        </script>
+        <style>
+            body {
+                font-family: 'Segoe UI', sans-serif;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                height: 100vh;
+                background-color: #eceff1;
+                margin: 0;
+            }
+
+            .card {
+                background: white;
+                padding: 40px;
+                border-radius: 12px;
+                box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+                text-align: center;
+                width: 450px;
+            }
+
+            h2 {
+                color: #2c3e50;
+                margin-bottom: 10px;
+            }
+
+            p {
+                color: #7f8c8d;
+                margin-bottom: 25px;
+            }
+
+            input[type="file"] {
+                display: block;
+                width: 100%;
+                margin-bottom: 20px;
+                border: 1px solid #ddd;
+                padding: 10px;
+                border-radius: 5px;
+            }
+
+            button {
+                background-color: #e74c3c;
+                color: white;
+                border: none;
+                padding: 12px 24px;
+                border-radius: 6px;
+                cursor: pointer;
+                font-weight: bold;
+                width: 100%;
+                font-size: 16px;
+                transition: 0.3s;
+            }
+
+            button:hover {
+                background-color: #c0392b;
+            }
+
+            button:disabled {
+                background-color: #95a5a6;
+                cursor: not-allowed;
+            }
+
+            #status {
+                margin-top: 20px;
+                font-weight: 500;
+            }
+
+            .success {
+                color: #28a745;
+            }
+
+            .error {
+                color: #dc3545;
+            }
+        </style>
+    </head>
+
+    <body>
+
+        <div class="card">
+            <h2>Tạo 2 Liên Đơn Thuốc</h2>
+            <p>Sử dụng phương pháp "Chụp ảnh" để giữ nguyên 100% hình ảnh chữ ký SmartCA</p>
+
+            <input type="file" id="pdfFile" accept="application/pdf">
+            <button id="btnProcess" onclick="processAndMerge()">Xử lý gộp liên</button>
+
+            <div id="status"></div>
+        </div>
+
+        <script>
+            async function processAndMerge() {
+                const fileInput = document.getElementById('pdfFile');
+                const status = document.getElementById('status');
+                const btn = document.getElementById('btnProcess');
+
+                if (!fileInput.files[0]) {
+                    status.innerHTML = '<span class="error">Vui lòng chọn file PDF!</span>';
+                    return;
+                }
+
+                status.innerHTML = 'Đang trích xuất hình ảnh chữ ký...';
+                btn.disabled = true;
+
+                try {
+                    const file = fileInput.files[0];
+                    const arrayBuffer = await file.arrayBuffer();
+
+                    // BƯỚC 1: Dùng PDF.js để "chụp ảnh" trang PDF gốc (giữ nguyên mọi con dấu)
+                    const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+                    const pdfDocument = await loadingTask.promise;
+                    const page = await pdfDocument.getPage(1);
+
+                    // Thiết lập độ phân giải cao (scale 4.0 ~ 300dpi) để khi in chữ không bị mờ
+                    const scale = 4.0;
+                    const viewport = page.getViewport({ scale: scale });
+
+                    // Chuẩn bị khung vẽ (canvas)
+                    const canvas = document.createElement('canvas');
+                    const context = canvas.getContext('2d');
+                    canvas.width = viewport.width;
+                    canvas.height = viewport.height;
+
+                    // Render PDF lên khung vẽ
+                    await page.render({ canvasContext: context, viewport: viewport }).promise;
+
+                    // Chuyển khung vẽ thành ảnh JPEG nét cao
+                    const imgDataUrl = canvas.toDataURL('image/jpeg', 1.0);
+                    const imgBytes = await fetch(imgDataUrl).then(res => res.arrayBuffer());
+
+                    status.innerHTML = 'Đang ghép thành 2 liên A5...';
+
+                    // BƯỚC 2: Dùng PDF-lib tạo file PDF mới chứa 2 bức ảnh vừa chụp
+                    const { PDFDocument } = PDFLib;
+                    const newPdfDoc = await PDFDocument.create();
+
+                    // Nạp bức ảnh vào PDF
+                    const embeddedImage = await newPdfDoc.embedJpg(imgBytes);
+
+                    // Tạo trang A4 ngang (841.89 x 595.28 points)
+                    const newPage = newPdfDoc.addPage([841.89, 595.28]);
+
+                    const halfWidth = 420.94;
+                    const height = 595.28;
+
+                    // Dán ảnh vào nửa bên trái
+                    newPage.drawImage(embeddedImage, {
+                        x: 0,
+                        y: 0,
+                        width: halfWidth,
+                        height: height
+                    });
+
+                    // Dán ảnh vào nửa bên phải
+                    newPage.drawImage(embeddedImage, {
+                        x: halfWidth,
+                        y: 0,
+                        width: halfWidth,
+                        height: height
+                    });
+
+                    // BƯỚC 3: Xuất file và tải về
+                    const finalPdfBytes = await newPdfDoc.save();
+                    const blob = new Blob([finalPdfBytes], { type: "application/pdf" });
+                    const link = document.createElement('a');
+                    link.href = URL.createObjectURL(blob);
+                    link.download = `2lien_codayduchuky_${file.name}`;
+                    link.click();
+
+                    status.innerHTML = '<span class="success">Hoàn thành! Đã giữ được chữ ký.</span>';
+                } catch (err) {
+                    console.error(err);
+                    status.innerHTML = `<span class="error">Lỗi: ${err.message}</span>`;
+                } finally {
+                    btn.disabled = false;
+                }
+            }
+        </script>
+
+    </body>
+
+</html>

@@ -3,11 +3,10 @@
 
     <head>
         <meta charset="UTF-8">
-        <title>Gộp 2 liên A5 - Giữ 100% Hình Ảnh Chữ Ký</title>
+        <title>Gộp 2 liên A5 - Hỗ trợ nhiều trang - Giữ chữ ký</title>
         <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
         <script>
-            // Cấu hình worker cho PDF.js
             pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
         </script>
         <style>
@@ -50,7 +49,7 @@
             }
 
             button {
-                background-color: #e74c3c;
+                background-color: #27ae60;
                 color: white;
                 border: none;
                 padding: 12px 24px;
@@ -63,7 +62,7 @@
             }
 
             button:hover {
-                background-color: #c0392b;
+                background-color: #219150;
             }
 
             button:disabled {
@@ -74,6 +73,7 @@
             #status {
                 margin-top: 20px;
                 font-weight: 500;
+                white-space: pre-line;
             }
 
             .success {
@@ -89,11 +89,11 @@
     <body>
 
         <div class="card">
-            <h2>Tạo 2 Liên Đơn Thuốc</h2>
-            <p>Sử dụng phương pháp "Chụp ảnh" để giữ nguyên 100% hình ảnh chữ ký SmartCA</p>
+            <h2>Công cụ Gộp 2 Liên</h2>
+            <p>Hỗ trợ file nhiều trang (Trang 1 -> 2 liên P1, Trang 2 -> 2 liên P2...)</p>
 
             <input type="file" id="pdfFile" accept="application/pdf">
-            <button id="btnProcess" onclick="processAndMerge()">Xử lý gộp liên</button>
+            <button id="btnProcess" onclick="processAndMerge()">Xử lý tất cả các trang</button>
 
             <div id="status"></div>
         </div>
@@ -109,75 +109,75 @@
                     return;
                 }
 
-                status.innerHTML = 'Đang trích xuất hình ảnh chữ ký...';
+                status.innerHTML = 'Đang khởi tạo...';
                 btn.disabled = true;
 
                 try {
                     const file = fileInput.files[0];
                     const arrayBuffer = await file.arrayBuffer();
 
-                    // BƯỚC 1: Dùng PDF.js để "chụp ảnh" trang PDF gốc (giữ nguyên mọi con dấu)
+                    // 1. Dùng PDF.js để đọc file
                     const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
                     const pdfDocument = await loadingTask.promise;
-                    const page = await pdfDocument.getPage(1);
+                    const totalPages = pdfDocument.numPages;
 
-                    // Thiết lập độ phân giải cao (scale 4.0 ~ 300dpi) để khi in chữ không bị mờ
-                    const scale = 4.0;
-                    const viewport = page.getViewport({ scale: scale });
-
-                    // Chuẩn bị khung vẽ (canvas)
-                    const canvas = document.createElement('canvas');
-                    const context = canvas.getContext('2d');
-                    canvas.width = viewport.width;
-                    canvas.height = viewport.height;
-
-                    // Render PDF lên khung vẽ
-                    await page.render({ canvasContext: context, viewport: viewport }).promise;
-
-                    // Chuyển khung vẽ thành ảnh JPEG nét cao
-                    const imgDataUrl = canvas.toDataURL('image/jpeg', 1.0);
-                    const imgBytes = await fetch(imgDataUrl).then(res => res.arrayBuffer());
-
-                    status.innerHTML = 'Đang ghép thành 2 liên A5...';
-
-                    // BƯỚC 2: Dùng PDF-lib tạo file PDF mới chứa 2 bức ảnh vừa chụp
+                    // 2. Tạo file PDF mới bằng PDF-lib
                     const { PDFDocument } = PDFLib;
                     const newPdfDoc = await PDFDocument.create();
-
-                    // Nạp bức ảnh vào PDF
-                    const embeddedImage = await newPdfDoc.embedJpg(imgBytes);
-
-                    // Tạo trang A4 ngang (841.89 x 595.28 points)
-                    const newPage = newPdfDoc.addPage([841.89, 595.28]);
 
                     const halfWidth = 420.94;
                     const height = 595.28;
 
-                    // Dán ảnh vào nửa bên trái
-                    newPage.drawImage(embeddedImage, {
-                        x: 0,
-                        y: 0,
-                        width: halfWidth,
-                        height: height
-                    });
+                    // Vòng lặp xử lý từng trang một
+                    for (let i = 1; i <= totalPages; i++) {
+                        status.innerHTML = `Đang xử lý trang ${i}/${totalPages}...`;
 
-                    // Dán ảnh vào nửa bên phải
-                    newPage.drawImage(embeddedImage, {
-                        x: halfWidth,
-                        y: 0,
-                        width: halfWidth,
-                        height: height
-                    });
+                        const page = await pdfDocument.getPage(i);
+                        const scale = 4.0; // Độ phân giải cao để in nét
+                        const viewport = page.getViewport({ scale: scale });
 
-                    // BƯỚC 3: Xuất file và tải về
+                        const canvas = document.createElement('canvas');
+                        const context = canvas.getContext('2d');
+                        canvas.width = viewport.width;
+                        canvas.height = viewport.height;
+
+                        // Vẽ trang PDF lên canvas
+                        await page.render({ canvasContext: context, viewport: viewport }).promise;
+
+                        // Chuyển canvas thành ảnh
+                        const imgDataUrl = canvas.toDataURL('image/jpeg', 0.95);
+                        const imgBytes = await fetch(imgDataUrl).then(res => res.arrayBuffer());
+                        const embeddedImage = await newPdfDoc.embedJpg(imgBytes);
+
+                        // Thêm một trang mới cho mỗi trang gốc
+                        const newPage = newPdfDoc.addPage([841.89, 595.28]);
+
+                        // Vẽ 2 lần trên trang mới
+                        newPage.drawImage(embeddedImage, {
+                            x: 0,
+                            y: 0,
+                            width: halfWidth,
+                            height: height
+                        });
+
+                        newPage.drawImage(embeddedImage, {
+                            x: halfWidth,
+                            y: 0,
+                            width: halfWidth,
+                            height: height
+                        });
+                    }
+
+                    status.innerHTML = 'Đang đóng gói file...';
                     const finalPdfBytes = await newPdfDoc.save();
+
                     const blob = new Blob([finalPdfBytes], { type: "application/pdf" });
                     const link = document.createElement('a');
                     link.href = URL.createObjectURL(blob);
-                    link.download = `2lien_codayduchuky_${file.name}`;
+                    link.download = `2_lien_full_${file.name}`;
                     link.click();
 
-                    status.innerHTML = '<span class="success">Hoàn thành! Đã giữ được chữ ký.</span>';
+                    status.innerHTML = `<span class="success">Thành công! \nĐã xử lý xong ${totalPages} trang.</span>`;
                 } catch (err) {
                     console.error(err);
                     status.innerHTML = `<span class="error">Lỗi: ${err.message}</span>`;

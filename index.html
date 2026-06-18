@@ -93,7 +93,7 @@
             <p>Hỗ trợ file nhiều trang (Trang 1 -> 2 liên P1, Trang 2 -> 2 liên P2...)</p>
 
             <input type="file" id="pdfFile" accept="application/pdf">
-            <button id="btnProcess" onclick="processAndMerge()">Xử lý tất cả các trang</button>
+            <button id="btnProcess" onclick="processAndMerge()">Xử lý và In ngay</button>
 
             <div id="status"></div>
         </div>
@@ -168,16 +168,40 @@
                         });
                     }
 
-                    status.innerHTML = 'Đang đóng gói file...';
+                    status.innerHTML = 'Đang chuẩn bị lệnh in...';
                     const finalPdfBytes = await newPdfDoc.save();
 
                     const blob = new Blob([finalPdfBytes], { type: "application/pdf" });
-                    const link = document.createElement('a');
-                    link.href = URL.createObjectURL(blob);
-                    link.download = `2_lien_full_${file.name}`;
-                    link.click();
+                    const blobUrl = URL.createObjectURL(blob);
 
-                    status.innerHTML = `<span class="success">Thành công! \nĐã xử lý xong ${totalPages} trang.</span>`;
+                    // Xóa iframe cũ nếu có trước đó
+                    const oldIframe = document.getElementById('pdfPrintIframe');
+                    if (oldIframe) {
+                        oldIframe.remove();
+                    }
+
+                    // Tạo một iframe ẩn để chứa PDF và gọi lệnh in
+                    const iframe = document.createElement('iframe');
+                    iframe.id = 'pdfPrintIframe';
+                    iframe.style.position = 'fixed';
+                    iframe.style.right = '0';
+                    iframe.style.bottom = '0';
+                    iframe.style.width = '0';
+                    iframe.style.height = '0';
+                    iframe.style.border = 'none';
+                    iframe.src = blobUrl;
+
+                    document.body.appendChild(iframe);
+
+                    // Đợi iframe tải xong nội dung PDF rồi kích hoạt lệnh in
+                    iframe.onload = function() {
+                        setTimeout(function() {
+                            iframe.contentWindow.focus();
+                            iframe.contentWindow.print();
+                            status.innerHTML = `<span class="success">Đã gửi lệnh in thành công cho ${totalPages} trang!</span>`;
+                        }, 200);
+                    };
+
                 } catch (err) {
                     console.error(err);
                     status.innerHTML = `<span class="error">Lỗi: ${err.message}</span>`;
